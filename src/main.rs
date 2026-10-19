@@ -5,15 +5,17 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, mpsc::Sender, mpsc::channel};
+use std::sync::{Arc, Mutex, mpsc::channel, mpsc::Sender,};
 use std::thread::{self, JoinHandle};
+use std::time::{UNIX_EPOCH, SystemTime};
 
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
+
 pub struct ThreadPool {
     workers: Vec<Option<JoinHandle<()>>>,
-    sender: Option<Sender<Job>>,
+    sender: Option<Sender<Job>>, 
 }
 
 impl ThreadPool {
@@ -26,32 +28,25 @@ impl ThreadPool {
         for id in 0..size {
             let rx = shared_receiver.clone();
 
-            let handler = thread::spawn(move || {
-                loop {
-                    let recieved_message = rx.lock().unwrap().recv();
+            let handler = thread::spawn(move || loop {
+                let recieved_message = rx.lock().unwrap().recv();
 
-                    match recieved_message {
-                        Ok(job) => job(),
-                        Err(_) => {
-                            println!("Воркер {} заканчивает свою работу...", id);
-                            break;
-                        }
-                    }
+                match recieved_message {
+                    Ok(job) => {job()}
+                    Err(_) => {println!("Воркер {} заканчивает свою работу...", id); break;}
                 }
+
             });
 
             workers.push(Some(handler));
         }
 
-        ThreadPool {
-            workers,
-            sender: Some(sender),
-        }
+        ThreadPool { workers, sender: Some(sender) }
     }
 
     pub fn execute<F>(&self, f: F)
     where
-        F: FnOnce() + Send + 'static,
+        F: FnOnce() + Send + 'static
     {
         let job: Job = Box::new(f);
         if let Some(ref sender) = self.sender {
@@ -60,17 +55,17 @@ impl ThreadPool {
     }
 }
 
+
 impl Drop for ThreadPool {
     fn drop(&mut self) {
         drop(self.sender.take());
-
+        
         for worker in &mut self.workers {
             if let Some(handle) = worker.take() {
-                handle
-                    .join()
-                    .expect("Не удалось дождаться завершения воркера")
+                handle.join().expect("Не удалось дождаться завершения воркера")
             }
         }
+
     }
 }
 
