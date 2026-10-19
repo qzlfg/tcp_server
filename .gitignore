@@ -1,0 +1,43 @@
+# ── Rust / Cargo ──────────────────────────────
+/target/
+**/*.rs.bk
+*.pdb
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+*.gcov
+lcov.info
+
+# ── IDE / редакторы ───────────────────────────
+.idea/
+*.iml
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Секреты и локальные конфиги ───────────────
+.env
+.env.*
+!.env.example
+*.local.toml
+config/local.*
+
+# ── Профилирование и бенчмарки ────────────────
+perf.data
+perf.data.old
+flamegraph.svg
+criterion/
+
+# ── Прочее ────────────────────────────────────
+*.log
+/tmp/
