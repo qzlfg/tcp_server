@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, mpsc::channel};
@@ -73,8 +73,14 @@ impl HttpRequest {
         let mut parts = line_buf.split_whitespace();
 
         let method_raw = parts.next().ok_or(HttpParseError::InvalidRequestLine)?;
-        let path = parts.next().ok_or(HttpParseError::InvalidRequestLine)?.to_string();
-        let version = parts.next().ok_or(HttpParseError::InvalidRequestLine)?.to_string();
+        let path = parts
+            .next()
+            .ok_or(HttpParseError::InvalidRequestLine)?
+            .to_string();
+        let version = parts
+            .next()
+            .ok_or(HttpParseError::InvalidRequestLine)?
+            .to_string();
 
         let method: HttpMethod = method_raw.parse()?;
 
@@ -84,24 +90,20 @@ impl HttpRequest {
 
         loop {
             let bytes_read = reader.read_line(&mut line_buf)?;
-            
+
             // Если соединение закрылось или встретили пустую строку "\r\n" — заголовки закончились
             if bytes_read == 0 || line_buf == "\r\n" || line_buf == "\n" {
                 break;
             }
 
             if let Some((name, val)) = line_buf.split_once(':') {
-                headers.insert(
-                    name.trim().to_ascii_lowercase(),
-                    val.trim().to_string(),
-                );
+                headers.insert(name.trim().to_ascii_lowercase(), val.trim().to_string());
             } else {
                 return Err(HttpParseError::InvalidHeader);
             }
 
             line_buf.clear();
         }
-
 
         let mut body = Vec::new();
 
@@ -152,8 +154,7 @@ fn handle_connection(mut stream: TcpStream) -> std::io::Result<()> {
             stream.write_all(response.as_bytes())?;
             stream.flush()?;
         }
-        Err(HttpParseError::ConnectionClosed) => {
-        }
+        Err(HttpParseError::ConnectionClosed) => {}
         Err(e) => {
             eprintln!("Ошибка парсинга запроса: {:?}", e);
             let bad_request = "HTTP/1.1 400 BAD REQUEST\r\nContent-Length: 0\r\n\r\n";
