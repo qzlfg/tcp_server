@@ -4,9 +4,75 @@ use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex, mpsc::channel};
-use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex, mpsc::Sender, mpsc::channel};
+use std::thread::{self, JoinHandle};
+
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+pub struct ThreadPool {
+    workers: Vec<Option<JoinHandle<()>>>,
+    sender: Option<Sender<Job>>,
+}
+
+impl ThreadPool {
+    pub fn new(size: usize) -> Self {
+        let (sender, receiver) = mpsc::channel::<Job>();
+
+        let shared_receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(size);
+
+        for id in 0..size {
+            let rx = shared_receiver.clone();
+
+            let handler = thread::spawn(move || {
+                loop {
+                    let recieved_message = rx.lock().unwrap().recv();
+
+                    match recieved_message {
+                        Ok(job) => job(),
+                        Err(_) => {
+                            println!("Воркер {} заканчивает свою работу...", id);
+                            break;
+                        }
+                    }
+                }
+            });
+
+            workers.push(Some(handler));
+        }
+
+        ThreadPool {
+            workers,
+            sender: Some(sender),
+        }
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job: Job = Box::new(f);
+        if let Some(ref sender) = self.sender {
+            sender.send(job).expect("Пул потоков уже остановлен");
+        }
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        for worker in &mut self.workers {
+            if let Some(handle) = worker.take() {
+                handle
+                    .join()
+                    .expect("Не удалось дождаться завершения воркера")
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum HttpMethod {
